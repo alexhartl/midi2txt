@@ -4,11 +4,13 @@ from midi2txt import bpm2tempo, calc_beat_times
 import argparse
 import os
 import copy
+import collections
 
 
 def midi_to_txt(input_file, bpm=120, calc_beats=False):
 
     times = []
+    open_notes = collections.defaultdict(collections.deque)
     max_time = 0
 
     infile = MidiFile(input_file)
@@ -68,18 +70,15 @@ def midi_to_txt(input_file, bpm=120, calc_beats=False):
             if message.type == 'note_on' and message.velocity > 0:
                 inst_idx = message.note
                 velocity = message.velocity  # float(message.velocity) / 127.0
+                open_notes[inst_idx].append(len(times))
                 times.append([cur_time, cur_time, inst_idx, velocity])
 
             if message.type == 'note_off' or (hasattr(message, 'velocity') and message.velocity == 0):
                 inst_idx = message.note
-                found_on = False
-                for i in reversed(range(len(times))):
-                    if times[i][2] == inst_idx:
-                        if times[i][0] == times[i][1]:
-                            times[i][1] = cur_time
-                            found_on = True
-                            break
-                if not found_on:
+                if len(open_notes[inst_idx]):
+                    note_idx = open_notes[inst_idx].popleft()
+                    times[note_idx][1] = cur_time
+                else:
                     print("Orphaned note_off event: %3.5f \t %d " % (cur_time, inst_idx))
 
     if calc_beats:
